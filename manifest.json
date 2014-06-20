@@ -1,0 +1,15 @@
+{
+    "name": "com.ubuntu.developer.acelankao.cryptsy",
+    "description": "description of Cryptsy",
+    "framework": "ubuntu-sdk-14.04-qml-dev1",
+    "architecture": "all",
+    "title": "Cryptsy",
+    "hooks": {
+        "Cryptsy": {
+            "apparmor": "Cryptsy.json",
+            "desktop": "Cryptsy.desktop"
+        }
+    },
+    "version": "0.1",
+    "maintainer": "acelan@acelan.idv.tw"
+}

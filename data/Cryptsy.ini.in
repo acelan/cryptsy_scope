@@ -1,0 +1,8 @@
+[ScopeConfig]
+DisplayName = Cryptsy Scope
+Description = This is a Cryptsy scope
+Author = Firstname Lastname
+Art = Cryptsy.Art
+Icon = Cryptsy.Icon
+SearchHint = Cryptsy.SearchHint
+HotKey = Cryptsy.HotKey
