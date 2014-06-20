@@ -55,6 +55,13 @@ CryptsyQuery::CryptsyQuery(std::string const& query) :
 CryptsyQuery::~CryptsyQuery()
 {
     qDebug() << __func__ << " : " << __LINE__;
+
+    for(auto i = trades_.begin(); i != trades_.end(); ++i)
+    {
+        QVector<Trade*> trades = i.value();
+        for(auto j = trades.begin(); j != trades.end(); j++)
+            delete *j;
+    }
 }
 
 void CryptsyQuery::cancelled()
@@ -105,7 +112,6 @@ QString CryptsyQuery::getImageFile(QString name)
     QString label = fi.baseName();
     const QVector<Trade*>& trades = trades_[label];
 
-    qDebug() << __func__ << " : " << __LINE__ << "label: " << label << " : size = " << trades.size();
     double current_price = 0;
     double previous_price = 0;
     Qt::GlobalColor bgcolor = Qt::darkBlue;
@@ -180,7 +186,6 @@ void CryptsyQuery::run(SearchReplyProxy const& reply)
                             recenttrades.push_back(new Trade(tradeJ["id"].toString(), tradeJ["time"].toString(), tradeJ["price"].toString(), tradeJ["quantity"].toString(), tradeJ["total"].toString()));
                         }
                         trades_[imglabel] = recenttrades;
-                        qDebug() << __func__ << " : " << __LINE__ << "label: " << title << " : size = " << recenttrades.size();
 
                         auto price = resJ["lasttradeprice"].toString();
 
