@@ -8,7 +8,7 @@
 
 using namespace unity::scopes;
 
-CryptsyPreview::CryptsyPreview(std::string const& uri) : uri_(uri)
+CryptsyPreview::CryptsyPreview(std::string const& uri): uri_(uri)
 {
     qDebug() << __func__ << " : " << __LINE__;
 }

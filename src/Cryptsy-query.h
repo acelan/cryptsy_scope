@@ -4,9 +4,12 @@
 #include <unity/scopes/SearchQueryBase.h>
 #include <unity/scopes/ReplyProxyFwd.h>
 
-#include <QCoreApplication>
+#include <QApplication>
 #include <QNetworkReply>
 #include <QVector>
+#include <QThread>
+
+using namespace unity::scopes;
 
 class Trade
 {
@@ -21,24 +24,31 @@ private:
     Trade() {}
 };
 
-class CryptsyQuery : public unity::scopes::SearchQueryBase
+class CryptsyQuery : public SearchQueryBase
 {
 public:
     CryptsyQuery(std::string const& query);
     ~CryptsyQuery();
     virtual void cancelled() override;
 
-    virtual void run(unity::scopes::SearchReplyProxy const& reply) override;
+    virtual void run(SearchReplyProxy const& reply) override;
 
     QString getImageFile(QString name);
+    void updateImage(QString name);
     QString getDataPath();
     void writeData();
     void readData();
 
+protected:
+    void reportData(SearchReplyProxy const& reply, std::shared_ptr<const Category>& cat);
+    void updateData(SearchReplyProxy const& reply, std::shared_ptr<const Category>& cat);
+
 private:
-    QMap<QString,QString> data_;
+    QByteArray rawdata_;
+    //QMap<QString,QByteArray> data_;
     QMap<QString,QVector<Trade*> > trades_;
     QString query_;
+
 };
 
 #endif

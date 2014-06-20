@@ -19,6 +19,7 @@
 #include <QDir>
 #include <QColor>
 #include <QVector>
+#include <QThread>
 
 using namespace unity::scopes;
 
@@ -76,7 +77,7 @@ void CryptsyQuery::writeData()
         return;
     }
     QDataStream out (&datafile);
-    out << data_;
+    out << rawdata_;
 }
 
 void CryptsyQuery::readData()
@@ -86,7 +87,7 @@ void CryptsyQuery::readData()
         return;
     }
     QDataStream in (&datafile);
-    in >> data_;
+    in >> rawdata_;
 }
 
 QString CryptsyQuery::getDataPath()
@@ -95,7 +96,7 @@ QString CryptsyQuery::getDataPath()
     return path;
 }
 
-QString CryptsyQuery::getImageFile(QString name)
+void CryptsyQuery::updateImage(QString name)
 {
     QString imgpath = getDataPath() + "/imgs";
     QDir imgdir(imgpath);
@@ -135,7 +136,16 @@ QString CryptsyQuery::getImageFile(QString name)
     p.end();
 
     img.save(filename, "PNG");
+}
 
+QString CryptsyQuery::getImageFile(QString name)
+{
+    QString imgpath = getDataPath() + "/imgs";
+    QDir imgdir(imgpath);
+    if (!imgdir.exists())
+        updateImage(name);
+
+    QString filename = imgpath + "/" + name;
     return filename;
 }
 
@@ -146,78 +156,82 @@ void CryptsyQuery::run(SearchReplyProxy const& reply)
 
     qDebug() << __func__ << " : " << __LINE__;
 
+    if(rawdata_.size() == 0)
+        updateData(reply, catGrid);
+    reportData(reply, catGrid);
+}
+
+void CryptsyQuery::reportData(SearchReplyProxy const& reply, std::shared_ptr<const Category>& cat)
+{
+        QJsonParseError err;
+        QJsonDocument doc = QJsonDocument::fromJson(rawdata_ , &err);
+        QJsonObject obj = doc.object();
+        QJsonObject returnObj = obj["return"].toObject();
+        QJsonObject marketsObj = returnObj["markets"].toObject();
+
+        for( int i = 0; i < marketsObj.count(); i++) {
+            CategorisedResult catres(cat);
+            QJsonObject resJ = marketsObj[marketsObj.keys().at(i)].toObject();
+
+            auto title = resJ["label"].toString();
+            if(!query_.isEmpty() && !title.contains(query_, Qt::CaseInsensitive))
+                continue;
+
+            QString imglabel(title);
+            imglabel.replace('/','_');
+
+            QVector<Trade*> recenttrades;
+            QJsonArray trades = resJ["recenttrades"].toArray();
+            QString desc = "price\tquantity\ttotal\n";
+            for(const auto &trade: trades)
+            {
+                QJsonObject tradeJ = trade.toObject();
+                recenttrades.push_back(new Trade(tradeJ["id"].toString(), tradeJ["time"].toString(), tradeJ["price"].toString(), tradeJ["quantity"].toString(), tradeJ["total"].toString()));
+                desc += QString::number(tradeJ["price"].toString().toDouble()) + "\t";
+                desc += QString::number(tradeJ["quantity"].toString().toDouble()) + "\t";
+                desc += QString::number(tradeJ["total"].toString().toDouble()) + "\n";
+            }
+            trades_[imglabel] = recenttrades;
+
+            auto price = resJ["lasttradeprice"].toString();
+            auto uri = VIEW_MARKET.arg(resJ["marketid"].toString());
+            auto image = getImageFile(imglabel+".png");
+            auto artist = "Market ID: " + resJ["marketid"].toString();
+
+            //set our CateogroisedResult object with out searchresults values
+            catres.set_uri(uri.toStdString());
+            catres.set_dnd_uri(uri.toStdString());
+            catres.set_title(title.toStdString());
+            catres.set_art(image.toStdString());
+
+            catres["description"] = Variant(desc.toStdString());
+            catres["artist"] = Variant(artist.toStdString());
+
+            //push the categorized result to the client
+            if (!reply->push(catres)) {
+                break; // false from push() means search waas cancelled
+            }
+        }
+
+        // update date after shown old data
+        updateData(reply, cat);
+}
+
+void CryptsyQuery::updateData(SearchReplyProxy const& reply, std::shared_ptr<const Category>& cat)
+{
     QEventLoop loop;
 
     QNetworkAccessManager manager;
     QObject::connect(&manager, SIGNAL(finished(QNetworkReply*)), &loop, SLOT(quit()));
 
     QObject::connect(&manager, &QNetworkAccessManager::finished,
-            [reply, catGrid, this](QNetworkReply *msg){
-                QByteArray data = msg->readAll();
-                QJsonParseError err;
-                QJsonDocument doc = QJsonDocument::fromJson(data, &err);
-                QJsonObject obj = doc.object();
-
-                if (err.error != QJsonParseError::NoError) {
-                    qCritical() << "Failed to parse server data: " << err.errorString();
-                } else {
-                    // Find the "market" array of results
-                    QJsonObject returnObj = obj["return"].toObject();
-                    QJsonObject marketsObj = returnObj["markets"].toObject();
-                    CategorisedResult catres(catGrid);
-
-                    //loop through results of our web query with each result called 'result'
-                    for( int i = 0; i < marketsObj.count(); i++) {
-                        //treat result as Q JSON
-                        QJsonObject resJ = marketsObj[marketsObj.keys().at(i)].toObject();
-
-                        // load up vars with from result
-                        auto title = resJ["label"].toString();
-                        if(!query_.isEmpty() && !title.contains(query_, Qt::CaseInsensitive))
-                            continue;
-                        QString imglabel(title);
-                        imglabel.replace('/','_');
-
-                        QVector<Trade*> recenttrades;
-                        QJsonArray trades = resJ["recenttrades"].toArray();
-                        QString desc = "price\tquantity\ttotal\n";
-                        for(const auto &trade: trades)
-                        {
-                            QJsonObject tradeJ = trade.toObject();
-                            recenttrades.push_back(new Trade(tradeJ["id"].toString(), tradeJ["time"].toString(), tradeJ["price"].toString(), tradeJ["quantity"].toString(), tradeJ["total"].toString()));
-                            desc += QString::number(tradeJ["price"].toString().toDouble()) + "\t";
-                            desc += QString::number(tradeJ["quantity"].toString().toDouble()) + "\t";
-                            desc += QString::number(tradeJ["total"].toString().toDouble()) + "\n";
-                        }
-                        trades_[imglabel] = recenttrades;
-
-                        auto price = resJ["lasttradeprice"].toString();
-                        auto uri = VIEW_MARKET.arg(resJ["marketid"].toString());
-                        auto image = getImageFile(imglabel+".png");
-                        auto artist = "Market ID: " + resJ["marketid"].toString();
-
-                        //set our CateogroisedResult object with out searchresults values
-                        catres.set_uri(uri.toStdString());
-                        catres.set_dnd_uri(uri.toStdString());
-                        catres.set_title(title.toStdString());
-                        catres.set_art(image.toStdString());
-
-                        catres["description"] = Variant(desc.toStdString());
-                        catres["artist"] = Variant(artist.toStdString());
-
-                        data_[imglabel] = price;
-
-                        //push the categorized result to the client
-                        if (!reply->push(catres)) {
-                            break; // false from push() means search waas cancelled
-                        }
-                    }
-                    writeData();
-                }
-            }
-            );
+            [reply, cat, this](QNetworkReply *msg){
+                rawdata_ = msg->readAll();
+                writeData();
+    });
 
     QString queryUri(ALL_MARKET_URI);
     manager.get(QNetworkRequest(QUrl(queryUri)));
     loop.exec();
 }
+
