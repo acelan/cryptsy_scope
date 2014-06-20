@@ -1,26 +1,31 @@
 #include"Cryptsy-preview.h"
 
-#include<unity/scopes/PreviewWidget.h>
-#include<unity/scopes/ColumnLayout.h>
-#include<unity/scopes/PreviewReply.h>
+#include <unity/scopes/PreviewWidget.h>
+#include <unity/scopes/ColumnLayout.h>
+#include <unity/scopes/PreviewReply.h>
 #include <unity/scopes/VariantBuilder.h>
+#include <QDebug>
 
 using namespace unity::scopes;
 
 CryptsyPreview::CryptsyPreview(std::string const& uri) : uri_(uri)
 {
+    qDebug() << __func__ << " : " << __LINE__;
 }
 
 CryptsyPreview::~CryptsyPreview()
 {
+    qDebug() << __func__ << " : " << __LINE__;
 }
 
 void CryptsyPreview::cancelled()
 {
+    qDebug() << __func__ << " : " << __LINE__;
 }
 
 void CryptsyPreview::run(PreviewReplyProxy const& reply)
 {
+    qDebug() << __func__ << " : " << __LINE__;
     //
     // This preview handler just reuses values of the original result via
     // add_attribute_mapping() calls, but it could also do another network
@@ -55,6 +60,8 @@ void CryptsyPreview::run(PreviewReplyProxy const& reply)
     // title field in the result to be displayed in this preview, thus providing
     // the result-specific data to the preview for display
     w_header.add_attribute_mapping("title", "title");
+    // Standard subtitle field here gets our 'artist' key value
+    w_header.add_attribute_mapping("subtitle", "artist");
 
     PreviewWidget w_art("artId", "image");
     w_art.add_attribute_mapping("source", "art");

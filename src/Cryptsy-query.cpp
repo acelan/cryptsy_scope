@@ -142,7 +142,7 @@ QString CryptsyQuery::getImageFile(QString name)
 void CryptsyQuery::run(SearchReplyProxy const& reply)
 {
     CategoryRenderer rdr(CR_GRID);
-    auto catGrid = reply->register_category("Virtual Currency", "All Markets", "", rdr);
+    auto catGrid = reply->register_category("Virtual Currency", "Virtual Currency", "", rdr);
 
     qDebug() << __func__ << " : " << __LINE__;
 
@@ -164,7 +164,7 @@ void CryptsyQuery::run(SearchReplyProxy const& reply)
                     // Find the "market" array of results
                     QJsonObject returnObj = obj["return"].toObject();
                     QJsonObject marketsObj = returnObj["markets"].toObject();
-                    CategorisedResult catres((catGrid));
+                    CategorisedResult catres(catGrid);
 
                     //loop through results of our web query with each result called 'result'
                     for( int i = 0; i < marketsObj.count(); i++) {
@@ -180,25 +180,30 @@ void CryptsyQuery::run(SearchReplyProxy const& reply)
 
                         QVector<Trade*> recenttrades;
                         QJsonArray trades = resJ["recenttrades"].toArray();
+                        QString desc = "price\tquantity\ttotal\n";
                         for(const auto &trade: trades)
                         {
                             QJsonObject tradeJ = trade.toObject();
                             recenttrades.push_back(new Trade(tradeJ["id"].toString(), tradeJ["time"].toString(), tradeJ["price"].toString(), tradeJ["quantity"].toString(), tradeJ["total"].toString()));
+                            desc += QString::number(tradeJ["price"].toString().toDouble()) + "\t";
+                            desc += QString::number(tradeJ["quantity"].toString().toDouble()) + "\t";
+                            desc += QString::number(tradeJ["total"].toString().toDouble()) + "\n";
                         }
                         trades_[imglabel] = recenttrades;
 
                         auto price = resJ["lasttradeprice"].toString();
-
                         auto uri = VIEW_MARKET.arg(resJ["marketid"].toString());
-
                         auto image = getImageFile(imglabel+".png");
-                        auto desc = resJ["label"].toString();
+                        auto artist = "Market ID: " + resJ["marketid"].toString();
 
                         //set our CateogroisedResult object with out searchresults values
                         catres.set_uri(uri.toStdString());
                         catres.set_dnd_uri(uri.toStdString());
                         catres.set_title(title.toStdString());
                         catres.set_art(image.toStdString());
+
+                        catres["description"] = Variant(desc.toStdString());
+                        catres["artist"] = Variant(artist.toStdString());
 
                         data_[imglabel] = price;
 
