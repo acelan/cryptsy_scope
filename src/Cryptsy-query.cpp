@@ -96,7 +96,7 @@ QString CryptsyQuery::getDataPath()
     return path;
 }
 
-void CryptsyQuery::updateImage(QString name)
+void CryptsyQuery::updateImage(QString name, bool chart=false)
 {
     QString imgpath = getDataPath() + "/imgs";
     QDir imgdir(imgpath);
@@ -106,24 +106,22 @@ void CryptsyQuery::updateImage(QString name)
         imgdir.mkdir(imgpath);
     }
 
-    QString filename = imgpath + "/" + name;
-    QImage img(200,200,QImage::Format_RGB16);
-
     QFileInfo fi(name);
     QString label = fi.baseName();
     const QVector<Trade*>& trades = trades_[label];
+
+    QImage img(200,200,QImage::Format_RGB16);
 
     double current_price = 0;
     double previous_price = 0;
     Qt::GlobalColor bgcolor = Qt::darkBlue;
     if(trades.size() > 2)
     {
-
         current_price = trades[0]->price_.toDouble();
         previous_price = trades[1]->price_.toDouble();
-        if(current_price > previous_price)
+        if(current_price - previous_price > 0.0000001)
             bgcolor = Qt::darkGreen;
-        else if(current_price < previous_price)
+        else if(previous_price - current_price > 0.0000001)
             bgcolor = Qt::darkRed;
     }
 
@@ -131,21 +129,64 @@ void CryptsyQuery::updateImage(QString name)
 
     QPainter p(&img);
     p.setPen(QPen(Qt::white));
-    p.setFont(QFont("Times", 28, QFont::Bold));
-    p.drawText(img.rect(), Qt::AlignCenter, QString::number(current_price));
+    if(!chart)
+    {
+        p.setFont(QFont("Times", 28, QFont::Bold));
+        p.drawText(img.rect(), Qt::AlignCenter, QString::number(current_price));
+    }
+    else
+    {
+        QFileInfo fi(name);
+        name = fi.baseName() + "_chart." + fi.suffix();
+        p.setFont(QFont("Times", 16, QFont::Bold));
+        p.drawText(img.rect(), Qt::AlignBottom | Qt::AlignRight, QString::number(current_price));
+
+        double max = 0, min = 99999;
+        int i = 0;
+        for( i = 0 ; i < trades.size(); i++)
+        {
+            if(trades[i]->price_.toDouble() > max)
+                max = trades[i]->price_.toDouble();
+            else if(trades[i]->price_.toDouble() < min)
+                min = trades[i]->price_.toDouble();
+        }
+
+        int x = 0;
+        double y = 100;
+        for( i = 0; i < trades.size(); i++)
+        {
+            int x2 = x + 200/50;
+            double y2 = 100;
+            if( max - min > 0.0000001)
+                y2 = 160 - (trades[i]->price_.toDouble()-min)/(max-min)*150;
+            p.drawLine(x, y, x2, y2);
+            x = x2;
+            y = y2;
+        }
+    }
     p.end();
 
+    QString filename = imgpath + "/" + name;
     img.save(filename, "PNG");
 }
 
-QString CryptsyQuery::getImageFile(QString name)
+QString CryptsyQuery::getImageFile(QString name, bool chart = false)
 {
     QString imgpath = getDataPath() + "/imgs";
-    QDir imgdir(imgpath);
-    if (!imgdir.exists())
-        updateImage(name);
+    QString label = name;
 
+    if(chart)
+    {
+        QFileInfo fi(name);
+        name = fi.baseName() + "_chart." + fi.suffix();
+    }
     QString filename = imgpath + "/" + name;
+
+    QDir imgdir(imgpath);
+    if (!imgdir.exists() || !QFile(filename).exists())
+        updateImage(label, chart);
+
+
     return filename;
 }
 
@@ -154,7 +195,7 @@ void CryptsyQuery::run(SearchReplyProxy const& reply)
     CategoryRenderer rdr(CR_GRID);
     auto catGrid = reply->register_category("Virtual Currency", "Virtual Currency", "", rdr);
 
-    qDebug() << __func__ << " : " << __LINE__;
+    qDebug() << __func__ << " : " << __LINE__ << " - rawdata.size() = " << rawdata_.size();
 
     if(rawdata_.size() == 0)
         updateData(reply, catGrid);
@@ -174,8 +215,6 @@ void CryptsyQuery::reportData(SearchReplyProxy const& reply, std::shared_ptr<con
             QJsonObject resJ = marketsObj[marketsObj.keys().at(i)].toObject();
 
             auto title = resJ["label"].toString();
-            if(!query_.isEmpty() && !title.contains(query_, Qt::CaseInsensitive))
-                continue;
 
             QString imglabel(title);
             imglabel.replace('/','_');
@@ -193,10 +232,14 @@ void CryptsyQuery::reportData(SearchReplyProxy const& reply, std::shared_ptr<con
             }
             trades_[imglabel] = recenttrades;
 
+            if(!query_.isEmpty() && !title.contains(query_, Qt::CaseInsensitive))
+                continue;
+
             auto price = resJ["lasttradeprice"].toString();
             auto uri = VIEW_MARKET.arg(resJ["marketid"].toString());
             auto image = getImageFile(imglabel+".png");
             auto artist = "Market ID: " + resJ["marketid"].toString();
+            auto image2 = getImageFile(imglabel+".png", true);
 
             //set our CateogroisedResult object with out searchresults values
             catres.set_uri(uri.toStdString());
@@ -206,6 +249,7 @@ void CryptsyQuery::reportData(SearchReplyProxy const& reply, std::shared_ptr<con
 
             catres["description"] = Variant(desc.toStdString());
             catres["artist"] = Variant(artist.toStdString());
+            catres["art2"] = Variant(image2.toStdString());
 
             //push the categorized result to the client
             if (!reply->push(catres)) {
@@ -228,10 +272,25 @@ void CryptsyQuery::updateData(SearchReplyProxy const& reply, std::shared_ptr<con
             [reply, cat, this](QNetworkReply *msg){
                 rawdata_ = msg->readAll();
                 writeData();
+
+                QJsonParseError err;
+                QJsonDocument doc = QJsonDocument::fromJson(rawdata_ , &err);
+                QJsonObject obj = doc.object();
+                QJsonObject returnObj = obj["return"].toObject();
+                QJsonObject marketsObj = returnObj["markets"].toObject();
+                for( int i = 0; i < marketsObj.count(); i++) {
+                    CategorisedResult catres(cat);
+                    QJsonObject resJ = marketsObj[marketsObj.keys().at(i)].toObject();
+
+                    QString title = resJ["label"].toString();
+                    QString imglabel(title);
+                    imglabel.replace('/','_');
+                    updateImage(imglabel+".png");
+                    updateImage(imglabel+".png", true);
+                }
     });
 
     QString queryUri(ALL_MARKET_URI);
     manager.get(QNetworkRequest(QUrl(queryUri)));
     loop.exec();
 }
-

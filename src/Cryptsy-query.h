@@ -33,8 +33,8 @@ public:
 
     virtual void run(SearchReplyProxy const& reply) override;
 
-    QString getImageFile(QString name);
-    void updateImage(QString name);
+    QString getImageFile(QString name, bool chart);
+    void updateImage(QString name, bool chart);
     QString getDataPath();
     void writeData();
     void readData();

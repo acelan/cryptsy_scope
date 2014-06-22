@@ -64,7 +64,7 @@ void CryptsyPreview::run(PreviewReplyProxy const& reply)
     w_header.add_attribute_mapping("subtitle", "artist");
 
     PreviewWidget w_art("artId", "image");
-    w_art.add_attribute_mapping("source", "art");
+    w_art.add_attribute_mapping("source", "art2");
 
     PreviewWidget w_info("infoId", "text");
     w_info.add_attribute_mapping("text", "description");
