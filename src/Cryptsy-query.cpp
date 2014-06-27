@@ -73,20 +73,11 @@ void CryptsyQuery::cancelled()
 void CryptsyQuery::writeData()
 {
     QFile datafile(getDataPath() + "/data.dat");
-    QDir datadir(getDataPath());
-    if (!datadir.exists())
-        datadir.mkdir(getDataPath());
-
     if(!datafile.open(QIODevice::WriteOnly)){
         return;
     }
-
-    // there should be something wrong when data size is too small
-    if( rawdata_.size() > 100)
-    {
-        QDataStream out (&datafile);
-        out << rawdata_;
-    }
+    QDataStream out (&datafile);
+    out << rawdata_;
 }
 
 void CryptsyQuery::readData()
@@ -272,7 +263,6 @@ void CryptsyQuery::reportData(SearchReplyProxy const& reply, std::shared_ptr<con
 
 void CryptsyQuery::updateData(SearchReplyProxy const& reply, std::shared_ptr<const Category>& cat)
 {
-
     QEventLoop loop;
 
     QNetworkAccessManager manager;
@@ -281,7 +271,6 @@ void CryptsyQuery::updateData(SearchReplyProxy const& reply, std::shared_ptr<con
     QObject::connect(&manager, &QNetworkAccessManager::finished,
             [reply, cat, this](QNetworkReply *msg){
                 rawdata_ = msg->readAll();
-                //qDebug() << "sizeof rawdata_ = " <<  rawdata_.size();
                 writeData();
 
                 QJsonParseError err;
