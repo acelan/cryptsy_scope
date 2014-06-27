@@ -271,7 +271,10 @@ void CryptsyQuery::updateData(SearchReplyProxy const& reply, std::shared_ptr<con
     QObject::connect(&manager, &QNetworkAccessManager::finished,
             [reply, cat, this](QNetworkReply *msg){
                 rawdata_ = msg->readAll();
-                writeData();
+                if(rawdata_.size() > 10000)
+                    writeData();
+                else
+                    readData();
 
                 QJsonParseError err;
                 QJsonDocument doc = QJsonDocument::fromJson(rawdata_ , &err);
